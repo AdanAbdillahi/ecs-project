@@ -17,3 +17,5 @@ crash.log
 
 # Lock file (can be versioned if you prefer reproducibility)
 .terraform.lock.hcl
+
+x
