@@ -13,7 +13,7 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
       ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-      IMAGE_TAG: ${{ secrets.IMAGE_TAG }}
+      IMAGE_TAG: latest
 
     steps:
       - name: Checkout Source
@@ -37,7 +37,7 @@ jobs:
           # Pass secrets as env vars to avoid exposing them in logs
           REGISTRY: ${{ secrets.ECR_REGISTRY }}
           REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ secrets.IMAGE_TAG }}
+          IMAGE_TAG: latest
         run: |
           echo "Building Docker image ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}"
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
@@ -56,7 +56,7 @@ jobs:
         env:
           REGISTRY: ${{ secrets.ECR_REGISTRY }}
           REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ secrets.IMAGE_TAG }}
+          IMAGE_TAG: latest
         run: |
           echo "Scanning image ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG} for vulnerabilities"
           trivy image --format table --ignore-unfixed --severity CRITICAL,HIGH --exit-code 1 \
@@ -69,7 +69,7 @@ jobs:
         env:
           REGISTRY: ${{ secrets.ECR_REGISTRY }}
           REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ secrets.IMAGE_TAG }}
+          IMAGE_TAG: latest
         run: |
           echo "Pushing image to ECR: ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}"
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
