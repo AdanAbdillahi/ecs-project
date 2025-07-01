@@ -1,14 +1,13 @@
-name: Build and Scan React App Container  
+name: Build, Scan, and Push React App Container
+
 on:
   push:
     branches: [ "main" ]
 
 jobs:
-  build-and-scan:
-    name: Build, Push and Scan Docker Image
+  build-and-push:
     runs-on: ubuntu-latest
 
-    # Environment variables from secrets (no plaintext credentials)
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
@@ -16,61 +15,41 @@ jobs:
       IMAGE_TAG: latest
 
     steps:
-      - name: Checkout Source
-        uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
+      - name: Validate ECR environment variables
+        run: |
+          if [ -z "${ECR_REGISTRY}" ] || [ -z "${ECR_REPOSITORY}" ]; then
+            echo "ECR_REGISTRY or ECR_REPOSITORY is not set!"
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-        # Grants AWS permissions to this job using the provided secrets
 
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
-        # No need to specify registry if using the same AWS account; 
-        # the action logs in to the default ECR registry for the AWS account
 
       - name: Build Docker image
-        env:
-          # Pass secrets as env vars to avoid exposing them in logs
-          REGISTRY: ${{ secrets.ECR_REGISTRY }}
-          REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: latest
         run: |
-          echo "Building Docker image ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}"
-          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
-        # ^ Uses the Dockerfile in the repository to build the image, tagged for ECR
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
 
-      - name: Install Trivy (Security Scanner)
+      - name: Install Trivy
         run: |
           sudo apt-get update -y
           sudo apt-get install -y wget
-          wget -qO- https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.tar.gz \
-            | tar -xzvf - -C /tmp 
+          wget -qO- https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.tar.gz | tar -xzvf - -C /tmp
           sudo mv /tmp/trivy /usr/local/bin/
-        # ^ Downloads the latest Trivy binary and installs it to the runner
 
       - name: Scan Docker image with Trivy
-        env:
-          REGISTRY: ${{ secrets.ECR_REGISTRY }}
-          REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: latest
         run: |
-          echo "Scanning image ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG} for vulnerabilities"
-          trivy image --format table --ignore-unfixed --severity CRITICAL,HIGH --exit-code 1 \
-            $REGISTRY/$REPOSITORY:$IMAGE_TAG
-        # ^ Runs Trivy on the locally built image. 
-        # The step will fail (exit code 1) if any HIGH or CRITICAL vulnerabilities are found.
+          trivy image --format table --ignore-unfixed --severity CRITICAL,HIGH --exit-code 1 $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
       - name: Push Docker image to ECR
-        if: ${{ success() }}
-        env:
-          REGISTRY: ${{ secrets.ECR_REGISTRY }}
-          REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: latest
         run: |
-          echo "Pushing image to ECR: ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}"
-          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
-        # ^ Uploads the Docker image to the Amazon ECR repository (executes only if previous steps succeeded)
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
