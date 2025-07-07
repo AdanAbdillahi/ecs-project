@@ -10,20 +10,13 @@ jobs:
 
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
-      ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+      ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }} # e.g. 123456789012.dkr.ecr.eu-west-2.amazonaws.com
+      ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }} # e.g. threat-model-app
       IMAGE_TAG: latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Validate ECR environment variables
-        run: |
-          if [ -z "${ECR_REGISTRY}" ] || [ -z "${ECR_REPOSITORY}" ]; then
-            echo "ECR_REGISTRY or ECR_REPOSITORY is not set!"
-            exit 1
-          fi
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -39,16 +32,14 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
 
-      - name: Install Trivy
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y wget
-          wget -qO- https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.tar.gz | tar -xzvf - -C /tmp
-          sudo mv /tmp/trivy /usr/local/bin/
-
       - name: Scan Docker image with Trivy
-        run: |
-          trivy image --format table --ignore-unfixed --severity CRITICAL,HIGH --exit-code 1 $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          format: table
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          exit-code: 1
 
       - name: Push Docker image to ECR
         run: |
